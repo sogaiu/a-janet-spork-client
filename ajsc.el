@@ -189,16 +189,16 @@ be sending anything remotely close to the limit."
 
 (defun ajsc--need-more-header-bytes-p ()
   "Determines if more header bytes are needed."
-  (< (length ajsc--recv-header-bytes) 4))
+  (< (string-bytes ajsc--recv-header-bytes) 4))
 
 (defun ajsc--parse-in-bytes (in-bytes)
   "Helper for processing IN-BYTES received from net via Emacs."
   ;; XXX
-  (message "length in-bytes: %d" (length in-bytes))
+  (message "length in-bytes: %d" (string-bytes in-bytes))
   (if (ajsc--need-more-header-bytes-p)
       ;; not enough info to calculate message length
-      (let* ((in-byte-cnt (length in-bytes))
-             (missing-cnt (- 4 (length ajsc--recv-header-bytes))))
+      (let* ((in-byte-cnt (string-bytes in-bytes))
+             (missing-cnt (- 4 (string-bytes ajsc--recv-header-bytes))))
         ;; XXX
         (message "number of header bytes needed: %d" missing-cnt)
         ;; XXX: guessing that this is almost always true
@@ -225,9 +225,9 @@ be sending anything remotely close to the limit."
             "")))
     ;; message length can be calculated because all header bytes found
     (let* ((msg-len (ajsc-decode-net-header-str ajsc--recv-header-bytes))
-           (in-byte-cnt (length in-bytes))
+           (in-byte-cnt (string-bytes in-bytes))
            (decoded-bytes ajsc--recv-decoded-bytes)
-           (rem-cnt (- msg-len (length decoded-bytes))))
+           (rem-cnt (- msg-len (string-bytes decoded-bytes))))
       ;; XXX
       (message "msg-len: %d" msg-len)
       (message "in-byte-cnt: %d" in-byte-cnt)
@@ -295,7 +295,7 @@ be sending anything remotely close to the limit."
 (defun ajsc-send-hello (process hello-str)
   "Send PROCESS the HELLO-STR."
   (process-send-string process
-                       (concat (ajsc-net-header-str (length hello-str))
+                       (concat (ajsc-net-header-str (string-bytes hello-str))
                                hello-str)))
 
 ;;; commands
@@ -402,7 +402,7 @@ be sending anything remotely close to the limit."
   (setq comint-input-sender
         (lambda (proc string)
           (let ((msg (concat
-                      (ajsc-net-header-str (1+ (length string)))
+                      (ajsc-net-header-str (1+ (string-bytes string)))
                       string)))
             (message "sending: %S" msg)
             (comint-simple-send proc msg))))
