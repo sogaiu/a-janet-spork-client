@@ -30,7 +30,7 @@
 ;;  for editor features to be enabled when visiting a buffer with janet
 ;;  code in it
 
-;;;;; Usage
+;;;; Usage
 
 ;; 0. Start Janet's Spork repl and note the host and port, e.g.
 ;;    in spork's directory:
@@ -68,7 +68,11 @@
 ;; X. Don't use the `comint-delete-output` command.  It may cause
 ;;    problems.
 
-;;;;; Acknowledgments
+;;;; Issues
+
+;; 1. @[] and friends are not detected appropriately (by smart-parens?)
+
+;;;; Acknowledgments
 
 ;; Thanks to those involved in:
 ;;
