@@ -401,9 +401,10 @@ be sending anything remotely close to the limit."
   ;; prepend header bytes
   (setq comint-input-sender
         (lambda (proc string)
-          (let ((msg (concat
-                      (ajsc-net-header-str (1+ (string-bytes string)))
-                      string)))
+          (let ((msg (substring-no-properties
+                      (concat
+                       (ajsc-net-header-str (1+ (string-bytes string)))
+                       string))))
             (message "sending: %S" msg)
             (comint-simple-send proc msg))))
   (setq mode-line-process '(":%s")))
