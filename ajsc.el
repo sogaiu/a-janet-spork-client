@@ -102,7 +102,7 @@
 ;;;; Requirements
 
 (require 'comint)
-(require 'smartparens)
+(require 'thingatpt)
 (require 'subr-x)
 
 ;;;; The Rest
@@ -350,11 +350,10 @@ be sending anything remotely close to the limit."
 (defun ajsc-send-expression-at-point ()
   "Send expression at point."
   (interactive)
-  (let* ((thing (sp-get-thing t))
-         (start (sp-get thing :beg))
-         (end (sp-get thing :end)))
-    (when (and start end)
-      (ajsc-send-region start end))))
+  (when-let* ((bound (bounds-of-thing-at-point 'sexp))
+              (start (car bound))
+              (end (cdr bound)))
+    (ajsc-send-region start end)))
 
 (defun ajsc-switch-to-repl ()
   "Switch to the repl buffer named by `ajsc-repl-buffer-name`."
