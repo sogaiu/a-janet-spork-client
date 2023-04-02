@@ -268,13 +268,13 @@ be sending anything remotely close to the limit."
                         remaining-msg-bytes))
           ;; try again
           (ajsc--parse-in-bytes remaining-in-bytes)))))))
-  
+
 ;; XXX: it is possible we might receive a fragment of a message
 ;;      so it may be necessary to retain the initial 4-byte header to
 ;;      determine message boundaries and possibly split / reassemble
 ;;      content
 ;;
-;;      from "Process Filter Functions" in the emacs manual:      
+;;      from "Process Filter Functions" in the emacs manual:
 ;;
 ;;      The output to the filter may come in chunks of any size. A
 ;;      program that produces the same output twice in a row may
@@ -424,7 +424,7 @@ The following keys are available in `ajsc-interaction-mode`:
   :lighter " ajsc"
   :keymap ajsc-interaction-mode-map)
 
-;;; 
+;;;
 
 ;; see "Sentinels: Detecting Process Status Changes"
 ;;
