@@ -251,7 +251,8 @@ Check `most-positive-fixnum` for Emacs integer limit.  Apparently
 this varies by machine.  In practice, it seems unlikely one would
 be sending anything remotely close to the limit."
   ;; XXX
-  (message "header-str: %S" header-str)
+  (when ajsc--debug-output
+    (message "header-str: %S" header-str))
   (let (;; XXX: not using -- not likely in real life?
         (int-max (min most-positive-fixnum (lsh 1 32))))
     (let ((result
@@ -259,7 +260,8 @@ be sending anything remotely close to the limit."
               (* (aref header-str 1) (lsh 1 8))
               (* (aref header-str 2) (lsh 1 16))
               (* (aref header-str 3) (lsh 1 24)))))
-      (message "computed length: %d" result)
+      (when ajsc--debug-output
+        (message "computed length: %d" result))
       result)))
 
 ;;; handling possibly fragmented network info from emacs
@@ -283,30 +285,35 @@ be sending anything remotely close to the limit."
 (defun ajsc--parse-in-bytes (in-bytes)
   "Helper for processing IN-BYTES received from net via Emacs."
   ;; XXX
-  (message "length in-bytes: %d" (string-bytes in-bytes))
+  (when ajsc--debug-output
+    (message "length in-bytes: %d" (string-bytes in-bytes)))
   (if (ajsc--need-more-header-bytes-p)
       ;; not enough info to calculate message length
       (let* ((in-byte-cnt (string-bytes in-bytes))
              (missing-cnt (- 4 (string-bytes ajsc--recv-header-bytes))))
         ;; XXX
-        (message "number of header bytes needed: %d" missing-cnt)
+        (when ajsc--debug-output
+          (message "number of header bytes needed: %d" missing-cnt))
         ;; XXX: guessing that this is almost always true
         (if (<= missing-cnt in-byte-cnt)
             (let ((more-header-bytes (substring in-bytes 0 missing-cnt))
                   (remaining-in-bytes (substring in-bytes missing-cnt)))
-              (message "filling in header bytes")
-              (message "more-header-bytes: %S" more-header-bytes)
-              (message "remaining-in-bytes: %S" remaining-in-bytes)
-              (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes)
+              (when ajsc--debug-output
+                (message "filling in header bytes")
+                (message "more-header-bytes: %S" more-header-bytes)
+                (message "remaining-in-bytes: %S" remaining-in-bytes)
+                (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes))
               (setq ajsc--recv-header-bytes
                     (concat ajsc--recv-header-bytes
                             more-header-bytes))
-              (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes)
+              (when ajsc--debug-output
+                (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes))
               ;; try again
               (ajsc--parse-in-bytes remaining-in-bytes))
           ;; not enough bytes to fill up the header bytes - unlikely?
           (progn
-            (message "header not complete yet")
+            (when ajsc--debug-output
+              (message "header not complete yet"))
             (setq ajsc--recv-header-bytes
                   (concat ajsc--recv-header-bytes
                           in-bytes))
@@ -318,13 +325,15 @@ be sending anything remotely close to the limit."
            (decoded-bytes ajsc--recv-decoded-bytes)
            (rem-cnt (- msg-len (string-bytes decoded-bytes))))
       ;; XXX
-      (message "msg-len: %d" msg-len)
-      (message "in-byte-cnt: %d" in-byte-cnt)
-      (message "rem-cnt: %d" rem-cnt)
+      (when ajsc--debug-output
+        (message "msg-len: %d" msg-len)
+        (message "in-byte-cnt: %d" in-byte-cnt)
+        (message "rem-cnt: %d" rem-cnt))
       (cond
        ;; all remaining bytes of message available
        ((= rem-cnt in-byte-cnt)
-        (message "got all bytes")
+        (when ajsc--debug-output
+          (message "got all bytes"))
         (setq ajsc--recv-header-bytes "")
         (setq ajsc--recv-decoded-bytes "")
         (let ((msgs (concat ajsc--recv-held-msgs
@@ -335,14 +344,16 @@ be sending anything remotely close to the limit."
           msgs))
        ;; end of message not received yet
        ((> rem-cnt in-byte-cnt)
-        (message "end of message not received yet")
+        (when ajsc--debug-output
+          (message "end of message not received yet"))
         (setq ajsc--recv-decoded-bytes
               (concat ajsc--recv-decoded-bytes in-bytes))
         ;; return empty string for now
         "")
        ;; start of another message detected
        ((< rem-cnt in-byte-cnt)
-        (message "found end of message, but another message detected")
+        (when ajsc--debug-output
+          (message "found end of message, but another message detected"))
         (let* ((remaining-msg-bytes (substring in-bytes 0 rem-cnt))
                (remaining-in-bytes (substring in-bytes rem-cnt)))
           (setq ajsc--recv-header-bytes "")
@@ -376,7 +387,8 @@ be sending anything remotely close to the limit."
 (defun ajsc-preoutput-filter-function (string)
   "A function for `comint-preoutput-filter-functions`, operates on STRING."
   ;; XXX
-  (message "received: %S" string)
+  (when ajsc--debug-output
+    (message "received: %S" string))
   (ajsc--parse-in-bytes string))
 
 ;;; greeting portion of network protocol
@@ -502,7 +514,8 @@ be sending anything remotely close to the limit."
                       (concat
                        (ajsc-net-header-str (1+ (string-bytes string)))
                        string))))
-            (message "sending: %S" msg)
+            (when ajsc--debug-output
+              (message "sending: %S" msg))
             (comint-simple-send proc msg))))
   (setq mode-line-process '(":%s")))
 
@@ -533,7 +546,8 @@ The following keys are available in `ajsc-interaction-mode`:
 (defun ajsc-sentinel (process event)
   "Sentinel for handling various events.
 PROCESS and EVENT are the usual arguments for sentinels."
-  (message "sentinel: %S" event)
+  (when ajsc--debug-output
+    (message "sentinel: %S" event))
   (cond ((string-prefix-p "connection broken by remote peer" event)
          (message "connection broken"))
         ;; should not be neeeded
