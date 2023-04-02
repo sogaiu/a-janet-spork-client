@@ -498,7 +498,6 @@ be sending anything remotely close to the limit."
   "Major mode for ajsc.
 
 \\{ajsc-mode-map}"
-
   :syntax-table lisp-mode-syntax-table
   (setq comint-prompt-read-only t)
   ;; XXX: does this need to be restricted to apply only to certain buffers?
