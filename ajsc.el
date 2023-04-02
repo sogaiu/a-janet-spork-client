@@ -420,8 +420,9 @@ be sending anything remotely close to the limit."
 The following keys are available in `ajsc-interaction-mode`:
 
 \\{ajsc-interaction-mode}"
-
-  nil " ajsc" ajsc-interaction-mode-map)
+  :init-value nil
+  :lighter " ajsc"
+  :keymap ajsc-interaction-mode-map)
 
 ;;; 
 
