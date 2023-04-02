@@ -2,7 +2,7 @@
 
 ;; Author: sogaiu
 ;; Version: 20200430
-;; Package-Requires: ((smartparens "1.11.0") (emacs "26.2"))
+;; Package-Requires: ((emacs "26.2"))
 ;; Keywords: janet, spork, network socket repl
 
 ;; This file is not part of GNU Emacs.
@@ -78,7 +78,6 @@
 ;;
 ;;   emacs
 ;;   janet
-;;   smartparens
 ;;
 ;; and transitively involved folks too ;)
 
@@ -102,7 +101,6 @@
 ;;;; Requirements
 
 (require 'comint)
-(require 'smartparens)
 (require 'subr-x)
 
 ;;;; The Rest
@@ -124,6 +122,93 @@ Host and port should be delimited with ':'."
 
 (defvar ajsc-repl-buffer-name "*ajsc-repl*"
   "Name of repl buffer.")
+
+;; XXX: better to support more than just paren expressions -- e.g. symbols
+(defvar ajsc--helper-path
+  (expand-file-name
+   (concat (expand-file-name
+	    (file-name-directory (or load-file-name
+				     buffer-file-name)))
+	   "ajsc/last-expression.janet"))
+  "Path to helper program to determine last paren expression.")
+
+(defvar ajsc--debug-output
+  nil
+  "If non-nil, output debug info to *Messages* buffer.")
+
+(defvar ajsc--temp-buffers
+  '()
+  "List of buffers to clean up before executing `ajsc--helper'.")
+
+(defun ajsc--helper (start end)
+  "Determine last paren expression by asking Janet.
+
+A region bounded by START and END is sent to a helper program."
+  (interactive "r")
+  (condition-case err
+      (let ((temp-buffer (generate-new-buffer "*ajsc-helper*"))
+            (result nil))
+        (dolist (old-buffer ajsc--temp-buffers)
+          (kill-buffer old-buffer))
+        (add-to-list 'ajsc--temp-buffers temp-buffer)
+        (save-excursion
+          (when ajsc--debug-output
+            (message "region: %S"
+                     (buffer-substring-no-properties start end)))
+          (call-process-region start end
+                               "janet"
+                               ;; https://emacs.stackexchange.com/a/54353
+                               nil `(,temp-buffer nil) nil
+                               ajsc--helper-path)
+          (set-buffer temp-buffer)
+          (setq result
+                (buffer-substring-no-properties (point-min) (point-max)))
+          (when ajsc--debug-output
+            (message "ajsc: %S" result))
+          ;; https://emacs.stackexchange.com/a/14599
+          (if (string-match "^[\0-\377[:nonascii:]]*" result)
+              (match-string 0 result)
+            (message "Unexpected result - source ok? <<%s>>" result)
+            nil)))
+    (error
+     (message "Error: %s %s" (car err) (cdr err)))))
+
+(defun ajsc--start-of-top-level-char-p (char)
+  "Return non-nil if CHAR can start a top level container construct.
+
+Supported top level container constructs include:
+
+  * paren tuple            ()
+  * quoted constructs      \\='() ~()
+
+Note that constructs such as numbers, keywords, and symbols are excluded."
+  (member char '(?\( ?\~ ?\')))
+
+(defun ajsc--column-zero-target-backward ()
+  "Move backward to the closest column zero target.
+
+Does not move point if there is no such construct.
+
+See `ajsc--start-of-top-level-char-p' for which characters determine
+a column zero target."
+  (when (not (bobp))             ; do nothing if at beginning of buffer
+    (let ((pos (point)))
+      ;; only consider positions before the starting point
+      (if (bolp)
+          (forward-line -1)
+        (beginning-of-line))
+      (if (ajsc--start-of-top-level-char-p (char-after (point)))
+          (setq pos (point))
+        (let ((done nil))
+          (while (not done)
+            (forward-line -1)
+            (cond ((ajsc--start-of-top-level-char-p
+                    (char-after (point)))
+                   (setq pos (point))
+                   (setq done t))
+                  ((bobp)
+                   (setq done t))))))
+      (goto-char pos))))
 
 ;;; network protocol header encoding / decoding
 
@@ -346,15 +431,23 @@ be sending anything remotely close to the limit."
   (interactive)
   (ajsc-send-region (point-min) (point-max)))
 
-;; XXX: figure out how to do this without smartparens
 (defun ajsc-send-expression-at-point ()
   "Send expression at point."
   (interactive)
-  (let* ((thing (sp-get-thing t))
-         (start (sp-get thing :beg))
-         (end (sp-get thing :end)))
-    (when (and start end)
-      (ajsc-send-region start end))))
+  (save-excursion
+    (let ((end (point)))
+      ;; XXX: if skipping backward over comments was easy, that might be
+      ;;      even nicer
+      ;;(skip-chars-backward " \t\n")
+      ;; XXX: cheap version
+      (save-excursion
+        (skip-chars-backward " \t\n")
+        (beginning-of-line)
+        (when (looking-at "[ \t]*#")
+          (setq end (point))))
+      (when-let ((beg (ajsc--column-zero-target-backward)))
+        (when-let ((code (ajsc--helper beg end)))
+          (ajsc-send-code code))))))
 
 (defun ajsc-switch-to-repl ()
   "Switch to the repl buffer named by `ajsc-repl-buffer-name`."
