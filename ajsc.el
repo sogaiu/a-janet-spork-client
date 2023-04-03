@@ -68,10 +68,6 @@
 ;; X. Don't use the `comint-delete-output` command.  It may cause
 ;;    problems.
 
-;;;; Issues
-
-;; 1. @[] and friends are not detected appropriately (by smart-parens?)
-
 ;;;; Acknowledgments
 
 ;; Thanks to those involved in:
