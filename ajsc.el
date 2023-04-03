@@ -103,6 +103,7 @@
 
 (require 'comint)
 (require 'smartparens)
+(require 'bindat)
 (require 'subr-x)
 
 ;;;; The Rest
@@ -126,6 +127,15 @@ Host and port should be delimited with ':'."
   "Name of repl buffer.")
 
 ;;; network protocol header encoding / decoding
+
+(defvar ajsc--bindat-spec
+  (bindat-type
+    (payload vec 2
+             (length uintr 32)
+             (data str length)))
+  "Bytes spec for a vector of two messages:
+[0] the result of evaluation.
+[1] the next repl prompt.")
 
 (defun ajsc-net-header-str (len)
   "Compute header string for Janet spork message of LEN bytes.
@@ -269,6 +279,17 @@ be sending anything remotely close to the limit."
           ;; try again
           (ajsc--parse-in-bytes remaining-in-bytes)))))))
 
+(defun ajsc--parse-in-bytes-bindat (in-bytes)
+  "Using bindat to parse the IN-BYTES."
+  ;; XXX
+  (let* ((data (bindat-unpack ajsc--bindat-spec in-bytes))
+         (res (bindat-get-field data 'payload)))
+    (message "length in-bytes: %d" (string-bytes in-bytes))
+    (mapconcat (lambda (struct)
+                 (bindat-get-field struct 'data))
+               res
+               "")))
+
 ;; XXX: it is possible we might receive a fragment of a message
 ;;      so it may be necessary to retain the initial 4-byte header to
 ;;      determine message boundaries and possibly split / reassemble
@@ -292,7 +313,7 @@ be sending anything remotely close to the limit."
   "A function for `comint-preoutput-filter-functions`, operates on STRING."
   ;; XXX
   (message "received: %S" string)
-  (ajsc--parse-in-bytes string))
+  (ajsc--parse-in-bytes-bindat string))
 
 ;;; greeting portion of network protocol
 
