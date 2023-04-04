@@ -130,6 +130,18 @@ Host and port should be delimited with ':'."
 
 (defvar ajsc--bindat-spec (bindat-type uintr 32))
 
+(defvar ajsc--pack-bindat-spec
+  (bindat-type
+    (length uintr 32)
+    (data str length)))
+
+(defun ajsc-pack-string (str)
+  "Pack string STR into binary data."
+  (bindat-pack
+   ajsc--pack-bindat-spec
+   `((length . ,(string-bytes str))
+     (data . ,str))))
+
 (defun ajsc-net-header-str (len)
   "Compute header string for Janet spork message of LEN bytes.
 
@@ -272,9 +284,7 @@ be sending anything remotely close to the limit."
 
 (defun ajsc-send-hello (process hello-str)
   "Send PROCESS the HELLO-STR."
-  (process-send-string process
-                       (concat (ajsc-net-header-str (string-bytes hello-str))
-                               hello-str)))
+  (process-send-string process (ajsc-pack-string hello-str)))
 
 ;;; commands
 
@@ -374,17 +384,17 @@ be sending anything remotely close to the limit."
   ;; remove header bytes appropriately
   (add-hook 'comint-preoutput-filter-functions
             #'ajsc-preoutput-filter-function
-           nil 'local)
+            nil 'local)
   ;; XXX: does this need to be restricted to apply only to certain buffers?
   ;; prepend header bytes
   (setq comint-input-sender
         (lambda (proc string)
-          (let ((msg (substring-no-properties
-                      (concat
-                       (ajsc-net-header-str (1+ (string-bytes string)))
-                       string))))
+          (let* ((string* (substring-no-properties string))
+                 (msg (ajsc-pack-string string*)))
             (message "sending: %S" msg)
-            (comint-simple-send proc msg))))
+            (process-send-string process msg)
+            ;; (comint-simple-send proc msg)
+            )))
   (setq mode-line-process '(":%s")))
 
 ;;;###autoload
@@ -462,7 +472,7 @@ endpoint.  ENDPOINT is a string of the form: \"hostname:port\"."
               ;; XXX: without this, header bytes were being interpreted as
               ;;      multibyte sometimes
               (set-process-coding-system repl-process 'binary)
-              (ajsc-send-hello repl-process endpoint)
+              (process-send-string process (ajsc-pack-string endpoint))
               (with-current-buffer repl-buffer
                 (ajsc-mode)
                 (pop-to-buffer (current-buffer))
