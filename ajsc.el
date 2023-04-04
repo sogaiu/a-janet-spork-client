@@ -128,14 +128,7 @@ Host and port should be delimited with ':'."
 
 ;;; network protocol header encoding / decoding
 
-(defvar ajsc--bindat-spec
-  (bindat-type
-    (payload vec 2
-             (length uintr 32)
-             (data str length)))
-  "Bytes spec for a vector of two messages:
-[0] the result of evaluation.
-[1] the next repl prompt.")
+(defvar ajsc--bindat-spec (bindat-type uintr 32))
 
 (defun ajsc-net-header-str (len)
   "Compute header string for Janet spork message of LEN bytes.
@@ -143,31 +136,7 @@ Host and port should be delimited with ':'."
 Check `most-positive-fixnum` for Emacs integer limit.  Apparently
 this varies by machine.  In practice, it seems unlikely one would
 be sending anything remotely close to the limit."
-  (let (;; XXX: not using -- not likely in real life?
-        (int-max (min most-positive-fixnum (lsh 1 32)))
-        (byte-strings nil)
-        (cnt 3))
-    ;; bytes 4 through 2
-    (while (< 0 cnt)
-      (let ((n-bits (* 8 cnt)))
-        (if (>= len (lsh 1 n-bits))
-          (let* (;; shifted bit pattern of the nth byte
-                 (shifted-bits (logand (lsh 255 n-bits)
-                                       len))
-                 ;; value of the nth byte
-                 (value (lsh shifted-bits (- n-bits)))
-                 ;; byte as a string
-                 (byte-string (byte-to-string value)))
-            (setq byte-strings (cons byte-string byte-strings))
-            (setq len (- len shifted-bits)))
-          (setq byte-strings (cons (byte-to-string 0)
-                                   byte-strings))))
-      (setq cnt (1- cnt)))
-    ;; byte 1
-    (setq byte-strings (cons (byte-to-string len)
-                             byte-strings))
-    ;; header is concatenation of accumulated 1-char strings
-    (apply #'concat byte-strings)))
+  (bindat-pack ajsc--bindat-spec len))
 
 (defun ajsc-decode-net-header-str (header-str)
   "Compute length represented by 4-byte HEADER-STR.
@@ -176,16 +145,11 @@ Check `most-positive-fixnum` for Emacs integer limit.  Apparently
 this varies by machine.  In practice, it seems unlikely one would
 be sending anything remotely close to the limit."
   ;; XXX
-  (message "header-str: %S" header-str)
-  (let (;; XXX: not using -- not likely in real life?
-        (int-max (min most-positive-fixnum (lsh 1 32))))
-    (let ((result
-           (+ (aref header-str 0)
-              (* (aref header-str 1) (lsh 1 8))
-              (* (aref header-str 2) (lsh 1 16))
-              (* (aref header-str 3) (lsh 1 24)))))
-      (message "computed length: %d" result)
-      result)))
+  ;; May want to consider (min most-positive-fixnum (lsh 1 32))
+  (let ((result (bindat-unpack ajsc--bindat-spec header-str)))
+    (message "header-str: %S" header-str)
+    (message "computed length: %d" result)
+    result))
 
 ;;; handling possibly fragmented network info from emacs
 
@@ -279,17 +243,6 @@ be sending anything remotely close to the limit."
           ;; try again
           (ajsc--parse-in-bytes remaining-in-bytes)))))))
 
-(defun ajsc--parse-in-bytes-bindat (in-bytes)
-  "Using bindat to parse the IN-BYTES."
-  ;; XXX
-  (let* ((data (bindat-unpack ajsc--bindat-spec in-bytes))
-         (res (bindat-get-field data 'payload)))
-    (message "length in-bytes: %d" (string-bytes in-bytes))
-    (mapconcat (lambda (struct)
-                 (bindat-get-field struct 'data))
-               res
-               "")))
-
 ;; XXX: it is possible we might receive a fragment of a message
 ;;      so it may be necessary to retain the initial 4-byte header to
 ;;      determine message boundaries and possibly split / reassemble
@@ -313,7 +266,7 @@ be sending anything remotely close to the limit."
   "A function for `comint-preoutput-filter-functions`, operates on STRING."
   ;; XXX
   (message "received: %S" string)
-  (ajsc--parse-in-bytes-bindat string))
+  (ajsc--parse-in-bytes string))
 
 ;;; greeting portion of network protocol
 
