@@ -1,15 +1,15 @@
 ;;; ajsc.el --- A Janet Spork Client -*- lexical-binding: t; -*-
 
 ;; Author: sogaiu
-;; Version: 20200430
+;; Version: 20230405
 ;; Package-Requires: ((emacs "26.2"))
-;; Keywords: janet, spork, network socket repl
+;; Keywords: janet, spork, netrepl, network socket repl
 
 ;; This file is not part of GNU Emacs.
 
 ;;; Commentary:
 
-;; A Janet Spork Client - Janet REPL interaction via Spork
+;; A Janet Spork Client - Janet REPL interaction via Spork's netrepl
 
 ;;;; Installation
 
