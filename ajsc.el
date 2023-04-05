@@ -131,25 +131,20 @@ Host and port should be delimited with ':'."
 (defvar ajsc-repl-buffer-name "*ajsc-repl*"
   "Name of repl buffer.")
 
+(defvar ajsc--debug-output nil
+  "If non-nil, output debug info to *Messages* buffer.")
+
 ;;; network protocol header encoding / decoding
 
 (defun ajsc-net-header-str (len)
-  "Compute header string for Janet spork message of LEN bytes.
-
-Check `most-positive-fixnum` for Emacs integer limit.  Apparently
-this varies by machine.  In practice, it seems unlikely one would
-be sending anything remotely close to the limit."
+  "Compute header string for Janet spork message of LEN bytes."
   (bindat-pack (bindat-type uintr 32)
                len))
 
 (defun ajsc-decode-net-header-str (header-str)
-  "Compute length represented by 4-byte HEADER-STR.
-
-Check `most-positive-fixnum` for Emacs integer limit.  Apparently
-this varies by machine.  In practice, it seems unlikely one would
-be sending anything remotely close to the limit."
-  ;; XXX
-  (message "header-str: %S" header-str)
+  "Compute length represented by 4-byte HEADER-STR."
+  (when ajsc--debug-output
+    (message "header-str: %S" header-str))
   (bindat-unpack (bindat-type uintr 32)
                  header-str))
 
@@ -168,36 +163,39 @@ be sending anything remotely close to the limit."
   (setq ajsc--recv-held-msgs ""))
 
 (defun ajsc--need-more-header-bytes-p ()
-  "Determines if more header bytes are needed."
+  "Determine if more header bytes are needed."
   (< (string-bytes ajsc--recv-header-bytes) 4))
 
 (defun ajsc--parse-in-bytes (in-bytes)
   "Helper for processing IN-BYTES received from net via Emacs."
-  ;; XXX
-  (message "length in-bytes: %d" (string-bytes in-bytes))
+  (when ajsc--debug-output
+    (message "length in-bytes: %d" (string-bytes in-bytes)))
   (if (ajsc--need-more-header-bytes-p)
       ;; not enough info to calculate message length
       (let* ((in-byte-cnt (string-bytes in-bytes))
              (missing-cnt (- 4 (string-bytes ajsc--recv-header-bytes))))
-        ;; XXX
-        (message "number of header bytes needed: %d" missing-cnt)
+        (when ajsc--debug-output
+          (message "number of header bytes needed: %d" missing-cnt))
         ;; XXX: guessing that this is almost always true
         (if (<= missing-cnt in-byte-cnt)
             (let ((more-header-bytes (substring in-bytes 0 missing-cnt))
                   (remaining-in-bytes (substring in-bytes missing-cnt)))
-              (message "filling in header bytes")
-              (message "more-header-bytes: %S" more-header-bytes)
-              (message "remaining-in-bytes: %S" remaining-in-bytes)
-              (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes)
+              (when ajsc--debug-output
+                (message "filling in header bytes")
+                (message "more-header-bytes: %S" more-header-bytes)
+                (message "remaining-in-bytes: %S" remaining-in-bytes)
+                (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes))
               (setq ajsc--recv-header-bytes
                     (concat ajsc--recv-header-bytes
                             more-header-bytes))
-              (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes)
+              (when ajsc--debug-output
+                (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes))
               ;; try again
               (ajsc--parse-in-bytes remaining-in-bytes))
           ;; not enough bytes to fill up the header bytes - unlikely?
           (progn
-            (message "header not complete yet")
+            (when ajsc--debug-output
+              (message "header not complete yet"))
             (setq ajsc--recv-header-bytes
                   (concat ajsc--recv-header-bytes
                           in-bytes))
@@ -208,14 +206,15 @@ be sending anything remotely close to the limit."
            (in-byte-cnt (string-bytes in-bytes))
            (decoded-bytes ajsc--recv-decoded-bytes)
            (rem-cnt (- msg-len (string-bytes decoded-bytes))))
-      ;; XXX
-      (message "msg-len: %d" msg-len)
-      (message "in-byte-cnt: %d" in-byte-cnt)
-      (message "rem-cnt: %d" rem-cnt)
+      (when ajsc--debug-output
+        (message "msg-len: %d" msg-len)
+        (message "in-byte-cnt: %d" in-byte-cnt)
+        (message "rem-cnt: %d" rem-cnt))
       (cond
        ;; all remaining bytes of message available
        ((= rem-cnt in-byte-cnt)
-        (message "got all bytes")
+        (when ajsc--debug-output
+          (message "got all bytes"))
         (setq ajsc--recv-header-bytes "")
         (setq ajsc--recv-decoded-bytes "")
         (let ((msgs (concat ajsc--recv-held-msgs
@@ -226,14 +225,16 @@ be sending anything remotely close to the limit."
           msgs))
        ;; end of message not received yet
        ((> rem-cnt in-byte-cnt)
-        (message "end of message not received yet")
+        (when ajsc--debug-output
+          (message "end of message not received yet"))
         (setq ajsc--recv-decoded-bytes
               (concat ajsc--recv-decoded-bytes in-bytes))
         ;; return empty string for now
         "")
        ;; start of another message detected
        ((< rem-cnt in-byte-cnt)
-        (message "found end of message, but another message detected")
+        (when ajsc--debug-output
+          (message "found end of message, but another message detected"))
         (let* ((remaining-msg-bytes (substring in-bytes 0 rem-cnt))
                (remaining-in-bytes (substring in-bytes rem-cnt)))
           (setq ajsc--recv-header-bytes "")
@@ -266,8 +267,8 @@ be sending anything remotely close to the limit."
 ;;      this seems undesirable...
 (defun ajsc-preoutput-filter-function (string)
   "A function for `comint-preoutput-filter-functions`, operates on STRING."
-  ;; XXX
-  (message "received: %S" string)
+  (when ajsc--debug-output
+    (message "received: %S" string))
   (ajsc--parse-in-bytes string))
 
 ;;; greeting portion of network protocol
@@ -376,7 +377,7 @@ be sending anything remotely close to the limit."
   ;; remove header bytes appropriately
   (add-hook 'comint-preoutput-filter-functions
             #'ajsc-preoutput-filter-function
-           nil 'local)
+            nil 'local)
   ;; XXX: does this need to be restricted to apply only to certain buffers?
   ;; prepend header bytes
   (setq comint-input-sender
@@ -385,7 +386,8 @@ be sending anything remotely close to the limit."
                       (concat
                        (ajsc-net-header-str (1+ (string-bytes string)))
                        string))))
-            (message "sending: %S" msg)
+            (when ajsc--debug-output
+              (message "sending: %S" msg))
             (comint-simple-send proc msg))))
   (setq mode-line-process '(":%s")))
 
@@ -416,7 +418,8 @@ The following keys are available in `ajsc-interaction-mode`:
 (defun ajsc-sentinel (process event)
   "Sentinel for handling various events.
 PROCESS and EVENT are the usual arguments for sentinels."
-  (message "sentinel: %S" event)
+  (when ajsc--debug-output
+    (message "sentinel: %S" event))
   (cond ((string-prefix-p "connection broken by remote peer" event)
          (message "connection broken"))
         ;; should not be neeeded
