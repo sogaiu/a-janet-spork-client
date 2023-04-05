@@ -392,7 +392,7 @@ be sending anything remotely close to the limit."
           (let* ((string* (substring-no-properties string))
                  (msg (ajsc-pack-string string*)))
             (message "sending: %S" msg)
-            (process-send-string process msg)
+            (process-send-string proc msg)
             ;; (comint-simple-send proc msg)
             )))
   (setq mode-line-process '(":%s")))
@@ -472,7 +472,7 @@ endpoint.  ENDPOINT is a string of the form: \"hostname:port\"."
               ;; XXX: without this, header bytes were being interpreted as
               ;;      multibyte sometimes
               (set-process-coding-system repl-process 'binary)
-              (process-send-string process (ajsc-pack-string endpoint))
+              (process-send-string repl-process (ajsc-pack-string endpoint))
               (with-current-buffer repl-buffer
                 (ajsc-mode)
                 (pop-to-buffer (current-buffer))
