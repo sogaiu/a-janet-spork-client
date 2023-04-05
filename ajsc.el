@@ -103,6 +103,7 @@
 
 (require 'comint)
 (require 'smartparens)
+(require 'bindat)
 (require 'subr-x)
 
 ;;;; The Rest
@@ -133,31 +134,8 @@ Host and port should be delimited with ':'."
 Check `most-positive-fixnum` for Emacs integer limit.  Apparently
 this varies by machine.  In practice, it seems unlikely one would
 be sending anything remotely close to the limit."
-  (let (;; XXX: not using -- not likely in real life?
-        (int-max (min most-positive-fixnum (lsh 1 32)))
-        (byte-strings nil)
-        (cnt 3))
-    ;; bytes 4 through 2
-    (while (< 0 cnt)
-      (let ((n-bits (* 8 cnt)))
-        (if (>= len (lsh 1 n-bits))
-          (let* (;; shifted bit pattern of the nth byte
-                 (shifted-bits (logand (lsh 255 n-bits)
-                                       len))
-                 ;; value of the nth byte
-                 (value (lsh shifted-bits (- n-bits)))
-                 ;; byte as a string
-                 (byte-string (byte-to-string value)))
-            (setq byte-strings (cons byte-string byte-strings))
-            (setq len (- len shifted-bits)))
-          (setq byte-strings (cons (byte-to-string 0)
-                                   byte-strings))))
-      (setq cnt (1- cnt)))
-    ;; byte 1
-    (setq byte-strings (cons (byte-to-string len)
-                             byte-strings))
-    ;; header is concatenation of accumulated 1-char strings
-    (apply #'concat byte-strings)))
+  (bindat-pack (bindat-type uintr 32)
+               len))
 
 (defun ajsc-decode-net-header-str (header-str)
   "Compute length represented by 4-byte HEADER-STR.
@@ -167,15 +145,8 @@ this varies by machine.  In practice, it seems unlikely one would
 be sending anything remotely close to the limit."
   ;; XXX
   (message "header-str: %S" header-str)
-  (let (;; XXX: not using -- not likely in real life?
-        (int-max (min most-positive-fixnum (lsh 1 32))))
-    (let ((result
-           (+ (aref header-str 0)
-              (* (aref header-str 1) (lsh 1 8))
-              (* (aref header-str 2) (lsh 1 16))
-              (* (aref header-str 3) (lsh 1 24)))))
-      (message "computed length: %d" result)
-      result)))
+  (bindat-unpack (bindat-type uintr 32)
+                 header-str))
 
 ;;; handling possibly fragmented network info from emacs
 
