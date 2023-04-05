@@ -1,9 +1,9 @@
 ;;; ajsc.el --- A Janet Spork Client -*- lexical-binding: t; -*-
 
 ;; Author: sogaiu
-;; Version: 20200430
-;; Package-Requires: ((smartparens "1.11.0") (emacs "26.2"))
-;; Keywords: janet, spork, network socket repl
+;; Version: 20230405
+;; Package-Requires: ((emacs "26.2"))
+;; Keywords: janet, spork, netrepl, network socket repl
 
 ;; This file is not part of GNU Emacs.
 
@@ -13,12 +13,8 @@
 
 ;;;; Installation
 
-;; Ensure this file and the following dependencies (and their
-;; dependencies) are in your load-path:
-;;
-;;   smartparens
-;;
-;;  and put this in your relevant init file:
+;; Ensure this file is in your load-path and put the following in the
+;; relevant init file:
 ;;
 ;;    (require 'ajsc)
 ;;
@@ -27,8 +23,14 @@
 ;;    (add-hook 'janet-mode-hook
 ;;              #'ajsc-interaction-mode)
 ;;
-;;  for editor features to be enabled when visiting a buffer with janet
-;;  code in it
+;;  or:
+;;
+;;    (add-hook 'janet-ts-mode-hook
+;;              #'ajsc-interaction-mode)
+;;
+;;  for editor features to be enabled when visiting a buffer with
+;;  Janet code in it.  Note, you'll need a janet-mode or janet-ts-mode
+;;  installed and setup as well.
 
 ;;;; Usage
 
@@ -70,15 +72,18 @@
 
 ;;;; Issues
 
-;; 1. @[] and friends are not detected appropriately (by smart-parens?)
+;; 1. @[], @{}, and friends are not detected appropriately (by thingatpt)
 
 ;;;; Acknowledgments
 
+;; Thanks to Inc0n for discussions and improvements about the
+;; efficiency, readability, and maintainability of the code.
+
 ;; Thanks to those involved in:
 ;;
+;;   bindat
 ;;   emacs
 ;;   janet
-;;   smartparens
 ;;
 ;; and transitively involved folks too ;)
 
@@ -101,9 +106,10 @@
 
 ;;;; Requirements
 
+(require 'bindat)
 (require 'comint)
-(require 'smartparens)
 (require 'subr-x)
+(require 'thingatpt)
 
 ;;;; The Rest
 
@@ -125,149 +131,65 @@ Host and port should be delimited with ':'."
 (defvar ajsc-repl-buffer-name "*ajsc-repl*"
   "Name of repl buffer.")
 
+(defvar ajsc--debug-output nil
+  "If non-nil, output debug info to *Messages* buffer.")
+
 ;;; network protocol header encoding / decoding
 
-(defun ajsc-net-header-str (len)
-  "Compute header string for Janet spork message of LEN bytes.
-
-Check `most-positive-fixnum` for Emacs integer limit.  Apparently
-this varies by machine.  In practice, it seems unlikely one would
-be sending anything remotely close to the limit."
-  (let (;; XXX: not using -- not likely in real life?
-        (int-max (min most-positive-fixnum (lsh 1 32)))
-        (byte-strings nil)
-        (cnt 3))
-    ;; bytes 4 through 2
-    (while (< 0 cnt)
-      (let ((n-bits (* 8 cnt)))
-        (if (>= len (lsh 1 n-bits))
-          (let* (;; shifted bit pattern of the nth byte
-                 (shifted-bits (logand (lsh 255 n-bits)
-                                       len))
-                 ;; value of the nth byte
-                 (value (lsh shifted-bits (- n-bits)))
-                 ;; byte as a string
-                 (byte-string (byte-to-string value)))
-            (setq byte-strings (cons byte-string byte-strings))
-            (setq len (- len shifted-bits)))
-          (setq byte-strings (cons (byte-to-string 0)
-                                   byte-strings))))
-      (setq cnt (1- cnt)))
-    ;; byte 1
-    (setq byte-strings (cons (byte-to-string len)
-                             byte-strings))
-    ;; header is concatenation of accumulated 1-char strings
-    (apply #'concat byte-strings)))
-
-(defun ajsc-decode-net-header-str (header-str)
-  "Compute length represented by 4-byte HEADER-STR.
-
-Check `most-positive-fixnum` for Emacs integer limit.  Apparently
-this varies by machine.  In practice, it seems unlikely one would
-be sending anything remotely close to the limit."
-  ;; XXX
-  (message "header-str: %S" header-str)
-  (let (;; XXX: not using -- not likely in real life?
-        (int-max (min most-positive-fixnum (lsh 1 32))))
-    (let ((result
-           (+ (aref header-str 0)
-              (* (aref header-str 1) (lsh 1 8))
-              (* (aref header-str 2) (lsh 1 16))
-              (* (aref header-str 3) (lsh 1 24)))))
-      (message "computed length: %d" result)
-      result)))
+(defun ajsc-pack-string (str)
+  "Pack STR using bindat."
+  (concat (bindat-pack
+           ;; XXX: apparently uintr is deprecated in Emacs 29
+           (bindat-type uintr 32)
+           (string-bytes str))
+          str))
 
 ;;; handling possibly fragmented network info from emacs
 
-(defvar ajsc--recv-header-bytes "")
-
-(defvar ajsc--recv-decoded-bytes "")
-
-(defvar ajsc--recv-held-msgs "")
-
-(defun ajsc--recv-reset-state ()
-  "Reset message reciving state."
-  (setq ajsc--recv-header-bytes "")
-  (setq ajsc--recv-decoded-bytes "")
-  (setq ajsc--recv-held-msgs ""))
-
-(defun ajsc--need-more-header-bytes-p ()
-  "Determines if more header bytes are needed."
-  (< (string-bytes ajsc--recv-header-bytes) 4))
+(defvar ajsc--decoded-len nil)
 
 (defun ajsc--parse-in-bytes (in-bytes)
   "Helper for processing IN-BYTES received from net via Emacs."
   ;; XXX
-  (message "length in-bytes: %d" (string-bytes in-bytes))
-  (if (ajsc--need-more-header-bytes-p)
-      ;; not enough info to calculate message length
-      (let* ((in-byte-cnt (string-bytes in-bytes))
-             (missing-cnt (- 4 (string-bytes ajsc--recv-header-bytes))))
-        ;; XXX
-        (message "number of header bytes needed: %d" missing-cnt)
-        ;; XXX: guessing that this is almost always true
-        (if (<= missing-cnt in-byte-cnt)
-            (let ((more-header-bytes (substring in-bytes 0 missing-cnt))
-                  (remaining-in-bytes (substring in-bytes missing-cnt)))
-              (message "filling in header bytes")
-              (message "more-header-bytes: %S" more-header-bytes)
-              (message "remaining-in-bytes: %S" remaining-in-bytes)
-              (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes)
-              (setq ajsc--recv-header-bytes
-                    (concat ajsc--recv-header-bytes
-                            more-header-bytes))
-              (message "ajsc--recv-header-bytes: %S" ajsc--recv-header-bytes)
-              ;; try again
-              (ajsc--parse-in-bytes remaining-in-bytes))
-          ;; not enough bytes to fill up the header bytes - unlikely?
-          (progn
-            (message "header not complete yet")
-            (setq ajsc--recv-header-bytes
-                  (concat ajsc--recv-header-bytes
-                          in-bytes))
-            ;; return empty string -- no data yet
-            "")))
-    ;; message length can be calculated because all header bytes found
-    (let* ((msg-len (ajsc-decode-net-header-str ajsc--recv-header-bytes))
-           (in-byte-cnt (string-bytes in-bytes))
-           (decoded-bytes ajsc--recv-decoded-bytes)
-           (rem-cnt (- msg-len (string-bytes decoded-bytes))))
-      ;; XXX
-      (message "msg-len: %d" msg-len)
-      (message "in-byte-cnt: %d" in-byte-cnt)
-      (message "rem-cnt: %d" rem-cnt)
-      (cond
-       ;; all remaining bytes of message available
-       ((= rem-cnt in-byte-cnt)
-        (message "got all bytes")
-        (setq ajsc--recv-header-bytes "")
-        (setq ajsc--recv-decoded-bytes "")
-        (let ((msgs (concat ajsc--recv-held-msgs
-                            decoded-bytes
-                            in-bytes)))
-          (setq ajsc--recv-held-msgs "")
-          ;; return all message content bytes
-          msgs))
-       ;; end of message not received yet
-       ((> rem-cnt in-byte-cnt)
-        (message "end of message not received yet")
-        (setq ajsc--recv-decoded-bytes
-              (concat ajsc--recv-decoded-bytes in-bytes))
-        ;; return empty string for now
-        "")
-       ;; start of another message detected
-       ((< rem-cnt in-byte-cnt)
-        (message "found end of message, but another message detected")
-        (let* ((remaining-msg-bytes (substring in-bytes 0 rem-cnt))
-               (remaining-in-bytes (substring in-bytes rem-cnt)))
-          (setq ajsc--recv-header-bytes "")
-          (setq ajsc--recv-decoded-bytes "")
-          (setq ajsc--recv-held-msgs
-                (concat ajsc--recv-held-msgs
-                        decoded-bytes
-                        remaining-msg-bytes))
-          ;; try again
-          (ajsc--parse-in-bytes remaining-in-bytes)))))))
+  (let ((len (string-bytes in-bytes)))
+    (when ajsc--debug-output
+      (message "length in bytes: %s %s" len ajsc--decoded-len))
+    (cond
+     ;; this is a new message
+     ((null ajsc--decoded-len)
+      (let ((len-str  (substring in-bytes 0 4))
+            (rest-str (substring in-bytes 4)))
+        ;; unpack message length
+        (setq ajsc--decoded-len
+              ;; XXX: apparently uintr is deprecated in Emacs 29
+              (bindat-unpack (bindat-type uintr 32)
+                             len-str))
+        (when ajsc--debug-output
+          (message "** new message")
+          (message "decoded-len: %d" ajsc--decoded-len))
+        ;; starts parsing
+        (ajsc--parse-in-bytes rest-str)))
+     ;; all message received
+     ((= ajsc--decoded-len len)
+      (when ajsc--debug-output
+        (message "** entire message received"))
+      (setq ajsc--decoded-len nil)
+      in-bytes)
+     ;; end of current message and start of another
+     ((< ajsc--decoded-len len)
+      (let ((rest (substring in-bytes 0 ajsc--decoded-len))
+            (remaining (substring in-bytes ajsc--decoded-len)))
+        (when ajsc--debug-output
+          (message "** one message finished, another one starting"))
+        (setq ajsc--decoded-len nil)
+        (concat rest
+                (ajsc--parse-in-bytes remaining))))
+     ;; expecting more data incoming
+     ((> ajsc--decoded-len len)
+      (when ajsc--debug-output
+        (message "** expecting more bytes for current message"))
+      (cl-decf ajsc--decoded-len len)
+      in-bytes))))
 
 ;; XXX: it is possible we might receive a fragment of a message
 ;;      so it may be necessary to retain the initial 4-byte header to
@@ -290,37 +212,23 @@ be sending anything remotely close to the limit."
 ;;      this seems undesirable...
 (defun ajsc-preoutput-filter-function (string)
   "A function for `comint-preoutput-filter-functions`, operates on STRING."
-  ;; XXX
-  (message "received: %S" string)
+  (when ajsc--debug-output
+    (message "received: %S" string))
   (ajsc--parse-in-bytes string))
-
-;;; greeting portion of network protocol
-
-(defun ajsc-send-hello (process hello-str)
-  "Send PROCESS the HELLO-STR."
-  (process-send-string process
-                       (concat (ajsc-net-header-str (string-bytes hello-str))
-                               hello-str)))
 
 ;;; commands
 
 (defun ajsc-send-code (code-str)
   "Send CODE-STR, a Janet form."
   (interactive "sCode: ")
-  (let ((here (point))
-        (original-buffer (current-buffer))
-        (repl-buffer (get-buffer ajsc-repl-buffer-name)))
+  (let ((repl-buffer (get-buffer ajsc-repl-buffer-name)))
     (if (not repl-buffer)
         (message (format "%s is missing..." ajsc-repl-buffer-name))
       ;; switch to ajsc buffer to prepare for appending
-      (set-buffer repl-buffer)
-      (goto-char (point-max))
-      (insert code-str)
-      (comint-send-input)
-      (set-buffer original-buffer)
-      (if (eq original-buffer repl-buffer)
-          (goto-char (point-max))
-        (goto-char here)))))
+      (with-current-buffer repl-buffer
+        (goto-char (point-max))
+        (insert code-str)
+        (comint-send-input)))))
 
 (defun ajsc-send-region (start end)
   "Send a region bounded by START and END."
@@ -346,15 +254,14 @@ be sending anything remotely close to the limit."
   (interactive)
   (ajsc-send-region (point-min) (point-max)))
 
-;; XXX: figure out how to do this without smartparens
+;; XXX: thingatpt doesn't quite understand janet
 (defun ajsc-send-expression-at-point ()
   "Send expression at point."
   (interactive)
-  (let* ((thing (sp-get-thing t))
-         (start (sp-get thing :beg))
-         (end (sp-get thing :end)))
-    (when (and start end)
-      (ajsc-send-region start end))))
+  (let* ((bound (bounds-of-thing-at-point 'sexp))
+         (start (car bound))
+         (end (cdr bound)))
+    (ajsc-send-region start end)))
 
 (defun ajsc-switch-to-repl ()
   "Switch to the repl buffer named by `ajsc-repl-buffer-name`."
@@ -405,12 +312,15 @@ be sending anything remotely close to the limit."
   ;; prepend header bytes
   (setq comint-input-sender
         (lambda (proc string)
-          (let ((msg (substring-no-properties
-                      (concat
-                       (ajsc-net-header-str (1+ (string-bytes string)))
-                       string))))
-            (message "sending: %S" msg)
-            (comint-simple-send proc msg))))
+          (let ((msg (ajsc-pack-string
+                      (substring-no-properties
+                       (if (and (not (string-empty-p string))
+                                (string-equal "\n" (substring string -1)))
+                         string
+                         (concat string "\n"))))))
+            (when ajsc--debug-output
+              (message "sending: %S" msg))
+            (process-send-string proc msg))))
   (setq mode-line-process '(":%s")))
 
 ;;;###autoload
@@ -440,7 +350,8 @@ The following keys are available in `ajsc-interaction-mode`:
 (defun ajsc-sentinel (process event)
   "Sentinel for handling various events.
 PROCESS and EVENT are the usual arguments for sentinels."
-  (message "sentinel: %S" event)
+  (when ajsc--debug-output
+    (message "sentinel: %S" event))
   (cond ((string-prefix-p "connection broken by remote peer" event)
          (message "connection broken"))
         ;; should not be neeeded
@@ -488,7 +399,8 @@ endpoint.  ENDPOINT is a string of the form: \"hostname:port\"."
               ;; XXX: without this, header bytes were being interpreted as
               ;;      multibyte sometimes
               (set-process-coding-system repl-process 'binary)
-              (ajsc-send-hello repl-process endpoint)
+              (process-send-string repl-process
+                                   (ajsc-pack-string endpoint))
               (with-current-buffer repl-buffer
                 (ajsc-mode)
                 (pop-to-buffer (current-buffer))
