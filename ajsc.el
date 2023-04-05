@@ -2,7 +2,7 @@
 
 ;; Author: sogaiu
 ;; Version: 20200430
-;; Package-Requires: ((smartparens "1.11.0") (emacs "26.2"))
+;; Package-Requires: ((emacs "26.2"))
 ;; Keywords: janet, spork, network socket repl
 
 ;; This file is not part of GNU Emacs.
@@ -13,12 +13,8 @@
 
 ;;;; Installation
 
-;; Ensure this file and the following dependencies (and their
-;; dependencies) are in your load-path:
-;;
-;;   smartparens
-;;
-;;  and put this in your relevant init file:
+;; Ensure this file is in your load-path and put the following in a
+;; relevant init file:
 ;;
 ;;    (require 'ajsc)
 ;;
@@ -27,8 +23,14 @@
 ;;    (add-hook 'janet-mode-hook
 ;;              #'ajsc-interaction-mode)
 ;;
-;;  for editor features to be enabled when visiting a buffer with janet
-;;  code in it
+;;  or:
+;;
+;;    (add-hook 'janet-ts-mode-hook
+;;              #'ajsc-interaction-mode)
+;;
+;;  for editor features to be enabled when visiting a buffer with
+;;  Janet code in it.  Note, you'll need a janet-mode or janet-ts-mode
+;;  installed and setup as well.
 
 ;;;; Usage
 
@@ -70,15 +72,18 @@
 
 ;;;; Issues
 
-;; 1. @[] and friends are not detected appropriately (by smart-parens?)
+;; 1. @[], @{}, and friends are not detected appropriately (by thingatpt)
 
 ;;;; Acknowledgments
 
+;; Thanks to Inc0n for discussions and improvements about the
+;; efficiency, readability, and maintainability of the code.
+
 ;; Thanks to those involved in:
 ;;
+;;   bindat
 ;;   emacs
 ;;   janet
-;;   smartparens
 ;;
 ;; and transitively involved folks too ;)
 
@@ -101,10 +106,10 @@
 
 ;;;; Requirements
 
-(require 'comint)
-(require 'smartparens)
 (require 'bindat)
+(require 'comint)
 (require 'subr-x)
+(require 'thingatpt)
 
 ;;;; The Rest
 
@@ -317,13 +322,13 @@ be sending anything remotely close to the limit."
   (interactive)
   (ajsc-send-region (point-min) (point-max)))
 
-;; XXX: figure out how to do this without smartparens
+;; XXX: thingatpt doesn't quite understand janet
 (defun ajsc-send-expression-at-point ()
   "Send expression at point."
   (interactive)
-  (let* ((thing (sp-get-thing t))
-         (start (sp-get thing :beg))
-         (end (sp-get thing :end)))
+  (let* ((bound (bounds-of-thing-at-point 'sexp))
+         (start (car bound))
+         (end (cdr bound)))
     (when (and start end)
       (ajsc-send-region start end))))
 
