@@ -389,7 +389,10 @@ be sending anything remotely close to the limit."
   ;; prepend header bytes
   (setq comint-input-sender
         (lambda (proc string)
-          (let* ((string* (substring-no-properties string))
+          (let* ((string* (substring-no-properties
+                           (if (string-suffix-p "\n" string)
+                               string
+                               (concat string "\n"))))
                  (msg (ajsc-pack-string string*)))
             (message "sending: %S" msg)
             (process-send-string proc msg)
