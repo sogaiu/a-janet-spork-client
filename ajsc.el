@@ -1,4 +1,4 @@
-;;; ajsc.el --- A Janet Spork Client -*- lexical-binding: t; -*-
+;;; ajsc.el --- A Janet Spork Netrepl Client -*- lexical-binding: t; -*-
 
 ;; Author: sogaiu
 ;; Version: 20230405
@@ -9,7 +9,7 @@
 
 ;;; Commentary:
 
-;; A Janet Spork Client - Janet REPL interaction via Spork's netrepl
+;; A Janet Spork (Netrepl) Client - Janet Spork Netrepl Interaction
 
 ;;;; Installation
 
@@ -34,7 +34,7 @@
 
 ;;;; Usage
 
-;; 0. Start Janet's Spork repl and note the host and port, e.g.
+;; 0. Start Janet's Spork netrepl and note the host and port, e.g.
 ;;    in spork's directory:
 ;;
 ;;      janet -e '(import ./spork/netrepl) (netrepl/server)'
@@ -49,7 +49,7 @@
 ;;
 ;;    i.e. a host or ip address followed by a colon and port number
 ;;
-;;    A buffer for interaction with the spork repl should appear.
+;;    A buffer for interaction with the spork netrepl should appear.
 
 ;; 2. Open a Janet source file in another buffer and:
 ;;
@@ -114,7 +114,7 @@
 ;;;; The Rest
 
 (defgroup ajsc nil
-  "A Janet Spork Client"
+  "A Janet Spork Netrepl Client"
   :prefix "ajsc-"
   :group 'applications)
 
@@ -137,7 +137,7 @@ Host and port should be delimited with ':'."
 ;;; network protocol header encoding / decoding
 
 (defun ajsc-net-header-str (len)
-  "Compute header string for Janet spork message of LEN bytes."
+  "Compute header string for Janet netrepl message of LEN bytes."
   (bindat-pack (bindat-type uintr 32)
                len))
 
@@ -347,7 +347,7 @@ Host and port should be delimited with ':'."
     (define-key map "\C-c\C-r" 'ajsc-send-region)
     (define-key map "\C-c\C-z" 'ajsc-switch-to-repl)
     (easy-menu-define ajsc-interaction-mode-map map
-      "A Janet Spork Client Interaction Mode Menu"
+      "A Janet Spork Netrepl Client Interaction Mode Menu"
       '("Ajsc"
         ["Send buffer" ajsc-send-buffer t]
         ["Send expression at point" ajsc-send-expression-at-point t]
@@ -360,13 +360,13 @@ Host and port should be delimited with ':'."
 (defvar ajsc-mode-map
   (let ((map (copy-keymap comint-mode-map)))
         (easy-menu-define ajsc-mode-map map
-          "A Janet Spork Client Mode Menu"
+          "A Janet Spork Netrepl Client Mode Menu"
           '("Ajsc"
             ["Switch to other window" other-window t]))
     map)
   "Ajsc mode map.")
 
-(define-derived-mode ajsc-mode comint-mode "A Janet Spork Client"
+(define-derived-mode ajsc-mode comint-mode "A Janet Spork Netrepl Client"
   "Major mode for ajsc.
 
 \\{ajsc-mode-map}"
@@ -441,7 +441,7 @@ PROCESS and EVENT are the usual arguments for sentinels."
 (defun ajsc (endpoint)
   "Start ajsc.
 
-Query user for ENDPOINT which specifies the spork REPL
+Query user for ENDPOINT which specifies the spork netrepl
 endpoint.  ENDPOINT is a string of the form: \"hostname:port\"."
   (interactive
    (let ((endpoint ajsc-default-endpoint))
