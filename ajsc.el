@@ -38,6 +38,11 @@
 ;;    in spork's directory:
 ;;
 ;;      janet -e '(import spork/netrepl) (netrepl/server)'
+;;
+;;    Note that this assumes spork has been installed.  This can
+;;    be done via jpm with the invocation:
+;;
+;;      jpm install spork
 
 ;; 1. Connect to the repl by:
 ;;
