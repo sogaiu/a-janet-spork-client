@@ -37,7 +37,7 @@
 ;; 0. Start Janet's Spork netrepl and note the host and port, e.g.
 ;;    in spork's directory:
 ;;
-;;      janet -e '(import ./spork/netrepl) (netrepl/server)'
+;;      janet -e '(import spork/netrepl) (netrepl/server)'
 
 ;; 1. Connect to the repl by:
 ;;
