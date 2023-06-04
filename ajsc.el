@@ -34,17 +34,60 @@
 
 ;;;; Usage
 
-;; 0. Start Janet's Spork netrepl and note the host and port, e.g.
-;;    in spork's directory:
+;; For specificity and brevity of explanation of the following steps,
+;; let's suppose one has a project directory named `my-project` with a
+;; subdirectory named `my-src` containing at least one file named
+;; `main.janet`.  Further, let's suppose `main.janet` has an entry
+;; point for the program.
 ;;
-;;      janet -e '(import spork/netrepl) (netrepl/server)'
+;; That might look like this:
 ;;
-;;    Note that this assumes spork has been installed.  This can
-;;    be done via jpm with the invocation:
+;;  my-project
+;;  |
+;;  -- my-src
+;;  |  |
+;;  |  -- main.janet
+;;  |
+;;  -- project.janet  <-  not mentioned above, but often present
+
+;; 0. Ensure that Janet's spork library is installed or available.
+;;
+;;    To install spork via jpm:
 ;;
 ;;      jpm install spork
+;;
+;;    If for whatever reason, there is a desire to avoid "installing"
+;;    spork, one way to proceed is to cd to `my-project` and:
+;;
+;;      git clone https://github.com/janet-lang/spork
+;;
+;;    This should result in a `spork` directory that's a sibling
+;;    directory of `my-src`.
 
-;; 1. Connect to the repl by:
+;; 1. Start a netrepl server and note the host and port.
+;;
+;;    If spork was installed, there may be a script named
+;;    `janet-netrepl` on PATH.  To start a netrepl server, cd to
+;;    `my-src` and invoke:
+;;
+;;      janet-netrepl
+;;
+;;    If instead, spork source has been cloned to a sibling directory
+;;    of `my-src`, one can start a netrepl server from within
+;;    `my-src` by:
+;;
+;;      janet -e '(import ../spork/netrepl) (netrepl/server)'
+;;
+;;    A key point is to start the netrepl server from the directory
+;;    containing the file with an entry point.  In the above parlance,
+;;    the directory is `my-src` and the file with an entry point is
+;;    `main.janet`.
+;;
+;;    For a different arrangement of files and directories, please
+;;    adjust the "path" portion of the `import` form
+;;    ("../spork/netrepl" in the above invocation) appropriately.
+
+;; 2. Connect to the repl by:
 ;;
 ;;      M-x ajsc
 ;;
@@ -56,7 +99,7 @@
 ;;
 ;;    A buffer for interaction with the spork netrepl should appear.
 
-;; 2. Open a Janet source file in another buffer and:
+;; 3. Open a Janet source file in another buffer and:
 ;;
 ;;      M-x ajsc-interaction-mode
 ;;
