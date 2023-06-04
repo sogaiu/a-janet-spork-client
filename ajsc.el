@@ -87,7 +87,7 @@
 ;;    adjust the "path" portion of the `import` form
 ;;    ("../spork/netrepl" in the above invocation) appropriately.
 
-;; 2. Connect to the repl by:
+;; 2. Open a .janet file in Emacs and connect using netrepl by:
 ;;
 ;;      M-x ajsc
 ;;
