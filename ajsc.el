@@ -20,16 +20,16 @@
 ;;
 ;;  Optionally, add:
 ;;
-;;    (add-hook 'janet-mode-hook
+;;    (add-hook 'janet-ts-mode-hook
 ;;              #'ajsc-interaction-mode)
 ;;
 ;;  or:
 ;;
-;;    (add-hook 'janet-ts-mode-hook
+;;    (add-hook 'janet-mode-hook
 ;;              #'ajsc-interaction-mode)
 ;;
 ;;  for editor features to be enabled when visiting a buffer with
-;;  Janet code in it.  Note, you'll need a janet-mode or janet-ts-mode
+;;  Janet code in it.  Note, you'll need a janet-ts-mode or janet-mode
 ;;  installed and setup as well.
 
 ;;;; Usage
@@ -103,9 +103,10 @@
 ;;
 ;;      M-x ajsc-interaction-mode
 ;;
-;;    (If janet-mode is enabled and appropriate configuration was
-;;     performed as described in the Installation section, manually
-;;     invoking `ajsc-interaction-mode` should not be necessary.)
+;;    (If janet-ts-mode / janet-mode is enabled and appropriate
+;;     configuration was performed as described in the Installation
+;;     section, manually invoking `ajsc-interaction-mode` should not
+;;     be necessary.)
 ;;
 ;;    There should be a Ajsc menu containing some convenience commands:
 ;;
